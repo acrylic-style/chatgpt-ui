@@ -1,0 +1,46 @@
+#messages {
+    width: 100%;
+    height: 100%;
+}
+
+#prompt {
+    width: 90%;
+    height: 300px;
+    margin: 15px 0;
+}
+
+button {
+    color: black;
+}
+
+button.large {
+    scale: 150%;
+    margin: 20px;
+}
+
+button, textarea {
+    transition: linear 150ms;
+}
+
+textarea:read-only {
+    filter: opacity(60%);
+}
+
+.container {
+    width: 90%;
+    margin: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.message {
+    margin: 15px auto;
+    align-content: center;
+    width: 90%;
+    border: solid darkgray 1px;
+    border-radius: 3px;
+    padding: 10px;
+    background-color: black;
+    font-family: 'JetBrains Mono', monospace;
+}
