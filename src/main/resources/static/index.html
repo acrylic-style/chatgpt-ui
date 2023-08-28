@@ -24,8 +24,10 @@
         <option value="gpt-3.5-16k">GPT-3.5 (16k context)</option>
         <option value="gpt-4" selected>GPT-4 (8k context)</option>
     </select>
+    <label for="system">命令 (System)</label><textarea id="system"></textarea>
     <label for="prompt">命令 (Prompt)</label><textarea id="prompt"></textarea>
     <button class="large" type="submit" id="generate">生成</button>
+    <button class="large" type="submit" id="clearGenerate">削除＆生成</button>
     <button class="large" id="clear">すべて削除</button>
 </div>
 <script src="/main.js"></script>

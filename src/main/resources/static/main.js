@@ -2,6 +2,7 @@ const converter = new showdown.Converter()
 const decoder = new TextDecoder()
 
 const elMessages = document.getElementById("messages")
+const elSystem = document.getElementById("system")
 const elPrompt = document.getElementById("prompt")
 const elGenerate = document.getElementById("generate")
 const elModel = document.getElementById("model")
@@ -37,6 +38,9 @@ elGenerate.onclick = () => {
     elPrompt.readOnly = true
     const model = elModel.value
     addMessage('User: ' + converter.makeHtml(elPrompt.value))
+    if (messages.length === 0 && elSystem.value.length > 0) {
+        messages.push({ role: 'system', content: elSystem.value })
+    }
     messages.push({ role: 'user', content: elPrompt.value })
     elPrompt.value = ''
     fetch("/generate", {
@@ -53,7 +57,7 @@ elGenerate.onclick = () => {
         const element = addMessage(currentContent)
         for await (const chunk of res.body) {
             const string = decoder.decode(chunk)
-            console.log(string)
+            //console.log(string)
             currentContent += string
             element.innerHTML = 'Assistant: ' + converter.makeHtml(currentContent)
             element.querySelectorAll('pre code').forEach((el) => {
@@ -75,4 +79,13 @@ document.getElementById('clear').onclick = () => {
     }
     elPrompt.value = ''
     messages.length = 0
+}
+
+document.getElementById('clearGenerate').onclick = () => {
+    while (elMessages.firstChild) {
+        elMessages.removeChild(elMessages.firstChild)
+    }
+    elPrompt.value = ''
+    messages.length = 0
+    elGenerate.onclick();
 }

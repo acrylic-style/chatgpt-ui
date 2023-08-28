@@ -3,7 +3,7 @@
     height: 100%;
 }
 
-#prompt {
+textarea {
     width: 90%;
     height: 300px;
     margin: 15px 0;
