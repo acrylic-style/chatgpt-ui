@@ -30,7 +30,7 @@ ReadableStream.prototype[Symbol.asyncIterator] = async function* () {
     }
 }
 
-elGenerate.onclick = () => {
+const generate = () => {
     if (elPrompt.value.length === 0) {
         return
     }
@@ -73,6 +73,8 @@ elGenerate.onclick = () => {
     })
 }
 
+elGenerate.onclick = generate
+
 document.getElementById('clear').onclick = () => {
     while (elMessages.firstChild) {
         elMessages.removeChild(elMessages.firstChild)
@@ -85,7 +87,6 @@ document.getElementById('clearGenerate').onclick = () => {
     while (elMessages.firstChild) {
         elMessages.removeChild(elMessages.firstChild)
     }
-    elPrompt.value = ''
     messages.length = 0
-    elGenerate.onclick();
+    generate()
 }
