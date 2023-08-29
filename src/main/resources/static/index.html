@@ -26,9 +26,18 @@
     </select>
     <label for="system">命令 (System)</label><textarea id="system"></textarea>
     <label for="prompt">命令 (Prompt)</label><textarea id="prompt"></textarea>
-    <button class="large" type="submit" id="generate">生成</button>
-    <button class="large" type="submit" id="clearGenerate">削除＆生成</button>
-    <button class="large" id="clear">すべて削除</button>
+    <div>
+        <button class="large" id="generate">生成</button>
+        <button class="large" id="clearGenerate">削除＆生成</button>
+        <button class="large" id="clear">削除</button>
+    </div>
+    <div>
+        <label>
+            <input type="text" id="save-id" placeholder="名前" />
+        </label>
+        <button class="large" id="save">保存</button>
+        <button class="large" id="load">読み込み</button>
+    </div>
 </div>
 <script src="/main.js"></script>
 </body>

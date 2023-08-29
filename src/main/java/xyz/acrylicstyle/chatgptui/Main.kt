@@ -8,8 +8,6 @@ import io.ktor.server.netty.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import io.ktor.util.pipeline.*
-import io.ktor.utils.io.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -22,19 +20,30 @@ import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 
-fun getResource(name: String): InputStream? = Application::class.java.getResourceAsStream(name)
+val DEV_MODE = System.getenv("DEV").toBoolean()
 
-fun staticResource(name: String) = getResource("/static/$name")?.readAllBytes()
+fun getStaticResource(name: String): InputStream? = Application::class.java.getResourceAsStream("/static/$name")
+
+fun getStaticResourceAsBytes(name: String) = getStaticResource(name)?.use { it.readAllBytes() }
+
+fun getCacheableStaticResource(name: String): () -> ByteArray =
+    if (DEV_MODE) {
+        ({ getStaticResourceAsBytes(name) ?: error("Unable to load $name") })
+    } else {
+        val byteArray = getStaticResourceAsBytes(name) ?: error("Unable to load $name")
+        ({ byteArray })
+    }
 
 val staticRoute = mapOf(
-        "/" to (staticResource("index.html") to ContentType.Text.Html.withParameter("charset", "utf-8")),
-        "/main.js" to (staticResource("main.js") to null),
-        "/main.css" to (staticResource("main.css") to null),
+        "/" to (getCacheableStaticResource("index.html") to ContentType.Text.Html.withParameter("charset", "utf-8")),
+        "/main.js" to (getCacheableStaticResource("main.js") to null),
+        "/main.css" to (getCacheableStaticResource("main.css") to null),
 )
 
 val openaiToken = System.getenv("OPENAI_TOKEN") ?: error("OPENAI_TOKEN is not defined")
 
 fun main() {
+    if (DEV_MODE) println("Resource caching is disabled")
     embeddedServer(
             Netty,
             port = System.getenv("PORT")?.toIntOrNull() ?: 8080,
@@ -83,12 +92,8 @@ fun Application.module() {
 
     routing {
         staticRoute.forEach { (path, pair) ->
-            if (pair.first == null) {
-                println("Could not fetch contents for $path")
-            } else {
-                get(path) {
-                    call.respondBytes(pair.first!!, pair.second)
-                }
+            get(path) {
+                call.respondBytes(pair.first(), pair.second)
             }
         }
 

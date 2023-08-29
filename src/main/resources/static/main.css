@@ -14,8 +14,9 @@ button {
 }
 
 button.large {
-    scale: 150%;
-    margin: 20px;
+    padding: 5px 10px;
+    font-size: 20px;
+    margin: 5px;
 }
 
 button, textarea {
@@ -42,5 +43,8 @@ textarea:read-only {
     border-radius: 3px;
     padding: 10px;
     background-color: black;
+}
+
+body, select {
     font-family: 'JetBrains Mono', monospace;
 }
