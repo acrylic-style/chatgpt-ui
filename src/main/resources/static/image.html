@@ -1,0 +1,37 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+    <style>
+        html {
+            background-color: darkslategray;
+            color: white;
+        }
+    </style>
+    <title>ChatGPT UI</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href='https://fonts.googleapis.com/css?family=JetBrains Mono' rel='stylesheet'>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"></script>
+    <link rel="stylesheet" href="/main.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github-dark-dimmed.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+</head>
+<body>
+<div class="container">
+    <div id="images">
+    </div>
+    <label for="prompt">命令 (Prompt)</label><textarea id="prompt"></textarea>
+    <label for="count">生成する数</label><input value="1" type="number" id="count" min="1" max="10" />
+    <label for="size">大きさ (Size)</label><select id="size">
+        <option value="256x256">256x256</option>
+        <option value="512x512">512x512</option>
+        <option value="1024x1024" selected>1024x1024</option>
+    </select>
+    <div>
+        <button class="large" id="generate">生成</button>
+        <button class="large" id="clearGenerate">削除＆生成</button>
+        <button class="large" id="clear">削除</button>
+    </div>
+</div>
+<script src="/image.js"></script>
+</body>
+</html>
