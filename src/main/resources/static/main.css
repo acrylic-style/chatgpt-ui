@@ -27,8 +27,8 @@ textarea:read-only {
     filter: opacity(60%);
 }
 
-.container {
-    width: 90%;
+.larger-container {
+    width: 85%;
     margin: auto;
     display: flex;
     flex-direction: column;
@@ -36,6 +36,7 @@ textarea:read-only {
 }
 
 .message {
+    color: white;
     margin: 15px auto;
     align-content: center;
     width: 90%;
@@ -43,6 +44,28 @@ textarea:read-only {
     border-radius: 3px;
     padding: 10px;
     background-color: black;
+}
+
+#history {
+    width: 15%;
+    display: flex;
+    flex-direction: column;
+    background-color: black;
+    color: white;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+#history>.btn-flat {
+    width: 100%;
+    color: white;
+    font-size: 13px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+#history>.btn-flat.selected {
+    background-color: rgba(255, 255, 255, 0.3);
 }
 
 body, select {

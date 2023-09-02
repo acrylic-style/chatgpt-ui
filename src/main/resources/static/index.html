@@ -3,7 +3,7 @@
 <head>
     <style>
         html {
-            background-color: darkslategray;
+            background-color: #131516;
             color: white;
         }
     </style>
@@ -11,32 +11,48 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link href='https://fonts.googleapis.com/css?family=JetBrains Mono' rel='stylesheet'>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/showdown/2.1.0/showdown.min.js"></script>
-    <link rel="stylesheet" href="/main.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github-dark-dimmed.min.css">
+    <link rel="stylesheet" href="/main.css"/>
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github-dark-dimmed.min.css">
+    <link rel="stylesheet"
+          href="https://fonts.googleapis.com/icon?family=Material+Icons">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/@materializecss/materialize@2.0.2-alpha/dist/css/materialize.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@materializecss/materialize@2.0.2-alpha/dist/js/materialize.min.js"></script>
+
 </head>
 <body>
-<div class="container">
-    <div id="messages">
+<div style="display: flex;">
+    <div id="history">
+        <a class="waves-effect btn-flat" id="clear"><i class="material-icons left">add</i>新しい会話</a>
+        <div class="divider"></div>
     </div>
-    <label for="model">モデル (Model)</label><select id="model">
-        <option value="gpt-3.5">GPT-3.5 (4k context)</option>
-        <option value="gpt-3.5-16k">GPT-3.5 (16k context)</option>
-        <option value="gpt-4" selected>GPT-4 (8k context)</option>
-    </select>
-    <label for="system">命令 (System)</label><textarea id="system"></textarea>
-    <label for="prompt">命令 (Prompt)</label><textarea id="prompt"></textarea>
-    <div>
-        <button class="large" id="generate">生成</button>
-        <button class="large" id="clearGenerate">削除＆生成</button>
-        <button class="large" id="clear">削除</button>
-    </div>
-    <div>
-        <label>
-            <input type="text" id="save-id" placeholder="名前" />
-        </label>
-        <button class="large" id="save">保存</button>
-        <button class="large" id="load">読み込み</button>
+    <div class="larger-container">
+        <div id="messages">
+        </div>
+        <div class="input-field col s12" style="width: 50%">
+            <select id="model">
+                <option value="gpt-3.5-turbo">GPT-3.5 (4k context)</option>
+                <option value="gpt-3.5-turbo-16k">GPT-3.5 (16k context)</option>
+                <option value="gpt-4" selected>GPT-4 (8k context)</option>
+            </select>
+            <label for="model">モデル (Model)</label>
+        </div>
+        <div class="input-field col s12" style="width: 80%">
+            <textarea id="system" class="materialize-textarea"></textarea>
+            <label for="system">命令 (System)</label>
+        </div>
+        <div class="input-field col s12" style="width: 80%">
+            <textarea id="prompt" class="materialize-textarea"></textarea>
+            <label for="prompt">命令 (Prompt)</label>
+            <button class="btn waves-light waves-effect left" id="delete" disabled>
+                <i class="material-icons left">delete</i>削除
+            </button>
+            <button class="btn waves-light waves-effect right" id="generate">
+                生成<i class="material-icons right">send</i>
+            </button>
+        </div>
     </div>
 </div>
 <script src="/main.js"></script>
