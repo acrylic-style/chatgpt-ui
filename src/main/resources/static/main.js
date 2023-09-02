@@ -208,7 +208,17 @@ elDelete.onclick = () => {
     loadAndShowHistory()
 }
 
+elModel.onchange = () => {
+    localStorage.setItem('model', elModel.value)
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+    if (localStorage.getItem('model')) {
+        elModel.value = localStorage.getItem('model')
+        document.querySelectorAll('option').forEach(e => e.selected = false)
+        document.querySelector(`option[value="${localStorage.getItem('model')}"]`).selected = true
+    }
+
     // initialize elements
     const elems = document.querySelectorAll('select');
     M.FormSelect.init(elems);
