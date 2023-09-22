@@ -21,11 +21,36 @@ const escapeHtml = (unsafe) => {
     return unsafe.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#039;')
 }
 
-const addMessage = htmlContent => {
+const addMessage = (messageIndex, htmlContent) => {
+    const parentDiv = document.createElement('div')
+    parentDiv.classList.add("message")
     const element = document.createElement("div")
-    element.classList.add("message")
     element.innerHTML = htmlContent
-    return elMessages.appendChild(element)
+    parentDiv.appendChild(element)
+    const copyButton = document.createElement('a')
+    copyButton.classList.add("btn-floating", "waves-effect", "white")
+    const icon = document.createElement('i')
+    icon.classList.add('material-icons')
+    icon.textContent = 'content_paste'
+    copyButton.appendChild(icon)
+    copyButton.onclick = () => {
+        const content = current.messages[messageIndex].content
+        if (content) {
+            navigator.clipboard.writeText(content).then(() => {
+                icon.textContent = 'done'
+            }).catch(() => {
+                icon.textContent = 'close'
+            }).finally(() => {
+                setTimeout(() => icon.textContent = 'content_paste', 1000)
+            })
+        } else {
+            icon.textContent = 'close'
+            setTimeout(() => icon.textContent = 'content_paste', 1000)
+        }
+    }
+    parentDiv.appendChild(copyButton)
+    elMessages.appendChild(parentDiv)
+    return element
 }
 
 // hacks for Chrome
@@ -61,12 +86,17 @@ const loadHistory = id => {
     if (!save[id] || !save[id].id || !save[id].messages) return
     current.id = save[id].id
     current.messages = save[id].messages
-    current.messages.forEach(e => {
-        addMessage(`${capitalize(e.role)}: ` + converter.makeHtml(e.content))
+    current.messages.forEach((e, i) => {
+        addMessage(i, `${capitalize(e.role)}: ` + converter.makeHtml(e.content))
     })
     document.querySelectorAll('#history>a').forEach(e => e.classList.remove('selected'))
     document.querySelector(`a[data-id="${id}"]`)?.classList?.add('selected')
     elDelete.disabled = false
+    elMessages.querySelectorAll('pre code').forEach((el) => {
+        if (!el.classList.contains('hljs')) {
+            hljs.highlightElement(el)
+        }
+    })
 }
 
 const loadAndShowHistory = () => {
@@ -110,12 +140,12 @@ const generate = () => {
         current.id = Math.floor(Math.random() * 10000000000000).toString(16)
         current.title = '' // reset title
         if (elSystem.value.length > 0) {
-            addMessage('System: ' + converter.makeHtml(elSystem.value))
+            addMessage(0, 'System: ' + converter.makeHtml(elSystem.value))
             current.messages.push({role: 'system', content: elSystem.value})
         }
     }
     const prompt = elPrompt.value
-    addMessage('User: ' + converter.makeHtml(prompt))
+    addMessage(current.messages.length, 'User: ' + converter.makeHtml(prompt))
     current.messages.push({role: 'user', content: prompt})
     elPrompt.value = ''
     fetch("/generate", {
@@ -129,11 +159,15 @@ const generate = () => {
         }),
     }).then(async (res) => {
         let currentContent = ''
-        const element = addMessage(currentContent)
+        const element = addMessage(current.messages.length, currentContent)
         for await (const chunk of res.body) {
             const string = decoder.decode(chunk)
             currentContent += string
-            element.innerHTML = 'Assistant: ' + converter.makeHtml(currentContent)
+            if ((currentContent.match(/```/g) || []).length % 2 === 1) {
+                element.innerHTML = 'Assistant: ' + converter.makeHtml(currentContent + '\n```')
+            } else {
+                element.innerHTML = 'Assistant: ' + converter.makeHtml(currentContent)
+            }
             element.querySelectorAll('pre code').forEach((el) => {
                 if (!el.classList.contains('hljs')) {
                     hljs.highlightElement(el)
