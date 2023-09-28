@@ -185,7 +185,7 @@ const generate = () => {
     }
     const prompt = elPrompt.value
     addMessage(current.messages.length, 'User: ' + converter.makeHtml(prompt))
-    const userTotalTokenCount = current.messages.map((e) => encodeGPT(e.content).length).reduce((a, b) => a + b)
+    const userTotalTokenCount = current.messages.map((e) => encodeGPT(e.content).length).reduce((a, b) => a + b, 0)
     const userTokenCount = encodeGPT(prompt).length
     current.messages.push({role: 'user', content: prompt})
     const userTokenField = document.querySelector(`div.message[data-message-index="${current.messages.length - 1}"]>span.token-field`)
