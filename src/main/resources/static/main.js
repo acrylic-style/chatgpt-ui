@@ -1,5 +1,6 @@
 const SUMMARIZE_PROMPT = 'Summarize the prompt in around 40 characters for English, and 15 characters for Japanese. You only have to output the result in the appropriate language (If English was provided, then output in English, and do NOT output Japanese). Provide only one summary, and do not provide more than one summary.'
 
+const { encode: encodeGPT } = GPTTokenizer_cl100k_base
 const converter = new showdown.Converter()
 const decoder = new TextDecoder()
 
@@ -24,31 +25,54 @@ const escapeHtml = (unsafe) => {
 const addMessage = (messageIndex, htmlContent) => {
     const parentDiv = document.createElement('div')
     parentDiv.classList.add("message")
+    parentDiv.setAttribute('data-message-index', messageIndex)
     const element = document.createElement("div")
     element.innerHTML = htmlContent
     parentDiv.appendChild(element)
     const copyButton = document.createElement('a')
     copyButton.classList.add("btn-floating", "waves-effect", "white")
-    const icon = document.createElement('i')
-    icon.classList.add('material-icons')
-    icon.textContent = 'content_paste'
-    copyButton.appendChild(icon)
+    const copyIcon = document.createElement('i')
+    copyIcon.classList.add('material-icons')
+    copyIcon.textContent = 'content_paste'
+    copyButton.appendChild(copyIcon)
     copyButton.onclick = () => {
-        const content = current.messages[messageIndex].content
+        const content = current.messages[parseInt(parentDiv.getAttribute('data-message-index'))].content
         if (content) {
             navigator.clipboard.writeText(content).then(() => {
-                icon.textContent = 'done'
+                copyIcon.textContent = 'done'
             }).catch(() => {
-                icon.textContent = 'close'
+                copyIcon.textContent = 'close'
             }).finally(() => {
-                setTimeout(() => icon.textContent = 'content_paste', 1000)
+                setTimeout(() => copyIcon.textContent = 'content_paste', 1000)
             })
         } else {
-            icon.textContent = 'close'
-            setTimeout(() => icon.textContent = 'content_paste', 1000)
+            copyIcon.textContent = 'close'
+            setTimeout(() => copyIcon.textContent = 'content_paste', 1000)
         }
     }
+    const deleteButton = document.createElement('a')
+    deleteButton.classList.add("btn-floating", "waves-effect", "white")
+    const deleteIcon = document.createElement('i')
+    deleteIcon.classList.add('material-icons')
+    deleteIcon.textContent = 'delete'
+    deleteButton.appendChild(deleteIcon)
+    deleteButton.onclick = () => {
+        const index = parseInt(parentDiv.getAttribute('data-message-index'))
+        current.messages.splice(index, 1)
+        for (const child of elMessages.children) {
+            const curr = parseInt(child.getAttribute('data-message-index'))
+            if (curr > index) {
+                child.setAttribute('data-message-index', (curr - 1).toString())
+            }
+        }
+        parentDiv.remove()
+        saveHistory()
+    }
+    const spanToken = document.createElement('span')
+    spanToken.classList.add('token-field')
     parentDiv.appendChild(copyButton)
+    parentDiv.appendChild(deleteButton)
+    parentDiv.appendChild(spanToken)
     elMessages.appendChild(parentDiv)
     return element
 }
@@ -86,8 +110,13 @@ const loadHistory = id => {
     if (!save[id] || !save[id].id || !save[id].messages) return
     current.id = save[id].id
     current.messages = save[id].messages
+    let totalTokens = 0
     current.messages.forEach((e, i) => {
         addMessage(i, `${capitalize(e.role)}: ` + converter.makeHtml(e.content))
+        const tokens = encodeGPT(e.content).length
+        const tokenField = document.querySelector(`div.message[data-message-index="${i}"]>span.token-field`)
+        tokenField.textContent = `(${totalTokens} + ${tokens} = ${totalTokens + tokens} tokens)`
+        totalTokens += tokens
     })
     document.querySelectorAll('#history>a').forEach(e => e.classList.remove('selected'))
     document.querySelector(`a[data-id="${id}"]`)?.classList?.add('selected')
@@ -146,7 +175,11 @@ const generate = () => {
     }
     const prompt = elPrompt.value
     addMessage(current.messages.length, 'User: ' + converter.makeHtml(prompt))
+    const userTotalTokenCount = current.messages.map((e) => encodeGPT(e.content).length).reduce((a, b) => a + b)
+    const userTokenCount = encodeGPT(prompt).length
     current.messages.push({role: 'user', content: prompt})
+    const userTokenField = document.querySelector(`div.message[data-message-index="${current.messages.length - 1}"]>span.token-field`)
+    userTokenField.textContent = `(${userTotalTokenCount} + ${userTokenCount} = ${userTotalTokenCount + userTokenCount} tokens)`
     elPrompt.value = ''
     fetch("/generate", {
         method: 'POST',
@@ -174,7 +207,11 @@ const generate = () => {
                 }
             })
         }
+        const assistantTotalTokenCount = current.messages.map((e) => encodeGPT(e.content).length).reduce((a, b) => a + b)
+        const assistantTokenCount = encodeGPT(currentContent).length
         current.messages.push({role: 'assistant', content: currentContent})
+        const assistantTokenField = document.querySelector(`div.message[data-message-index="${current.messages.length - 1}"]>span.token-field`)
+        assistantTokenField.textContent = `(${assistantTotalTokenCount} + ${assistantTokenCount} = ${assistantTotalTokenCount + assistantTokenCount} tokens)`
         if (!current.title || current.title.length === 0) {
             // summarize the prompt
             await fetch('/generate', {
