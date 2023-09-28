@@ -59,13 +59,22 @@ const addMessage = (messageIndex, htmlContent) => {
     deleteButton.onclick = () => {
         const index = parseInt(parentDiv.getAttribute('data-message-index'))
         current.messages.splice(index, 1)
+
+        let totalTokens = 0
+        parentDiv.remove()
         for (const child of elMessages.children) {
             const curr = parseInt(child.getAttribute('data-message-index'))
             if (curr > index) {
                 child.setAttribute('data-message-index', (curr - 1).toString())
             }
         }
-        parentDiv.remove()
+        for (const child of elMessages.children) {
+            const curr = parseInt(child.getAttribute('data-message-index'))
+            const tokenCount = encodeGPT(current.messages[curr].content).length
+            const tokenField = document.querySelector(`div.message[data-message-index="${curr}"]>span.token-field`)
+            tokenField.textContent = `(${totalTokens} + ${tokenCount} = ${totalTokens + tokenCount} tokens)`
+            totalTokens += tokenCount
+        }
         saveHistory()
     }
     const spanToken = document.createElement('span')
@@ -109,6 +118,7 @@ const loadHistory = id => {
     messages.length = 0
     if (!save[id] || !save[id].id || !save[id].messages) return
     current.id = save[id].id
+    current.title = save[id].title
     current.messages = save[id].messages
     let totalTokens = 0
     current.messages.forEach((e, i) => {
