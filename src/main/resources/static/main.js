@@ -132,7 +132,7 @@ const loadHistory = id => {
     let totalTokens = 0
     current.messages.forEach((e, i) => {
         addMessage(i, `${capitalize(e.role)}: ` + converter.makeHtml(filterContent(e.content)))
-        const tokens = encodeGPT(e.content).length
+        const tokens = e.token_count || encodeGPT(e.content).length
         const tokenField = document.querySelector(`div.message[data-message-index="${i}"]>span.token-field`)
         tokenField.textContent = `(${totalTokens} + ${tokens} = ${totalTokens + tokens} tokens)`
         totalTokens += tokens
@@ -224,7 +224,6 @@ const generate = () => {
         }
         const assistantTotalTokenCount = current.messages.map((e) => encodeGPT(e.content).length).reduce((a, b) => a + b)
         const assistantTokenCount = encodeGPT(currentContent).length
-        current.messages.push({role: 'assistant', content: currentContent, token_count: assistantTokenCount})
         // process |interpret| block
         if (currentContent.includes('|interpret_start|\n```') && currentContent.includes('```\n|interpret_end|')) {
             const code = currentContent.replace(/[^]*\|interpret_start\|\n```(?:js|javascript)?\n([^]+)\n```\n\|interpret_end\|[^]*/, '$1')
@@ -252,6 +251,7 @@ const generate = () => {
             }
         }
 
+        current.messages.push({role: 'assistant', content: currentContent, token_count: assistantTokenCount})
         const assistantTokenField = document.querySelector(`div.message[data-message-index="${current.messages.length - 1}"]>span.token-field`)
         assistantTokenField.textContent = `(${assistantTotalTokenCount} + ${assistantTokenCount} = ${assistantTotalTokenCount + assistantTokenCount} tokens)`
         if (!current.title || current.title.length === 0) {
