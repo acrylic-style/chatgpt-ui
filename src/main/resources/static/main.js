@@ -70,7 +70,7 @@ const addMessage = (messageIndex, htmlContent) => {
         }
         for (const child of elMessages.children) {
             const curr = parseInt(child.getAttribute('data-message-index'))
-            const tokenCount = encodeGPT(current.messages[curr].content).length
+            const tokenCount = current.messages[curr].token_count || encodeGPT(current.messages[curr].content).length
             const tokenField = document.querySelector(`div.message[data-message-index="${curr}"]>span.token-field`)
             tokenField.textContent = `(${totalTokens} + ${tokenCount} = ${totalTokens + tokenCount} tokens)`
             totalTokens += tokenCount
@@ -84,6 +84,15 @@ const addMessage = (messageIndex, htmlContent) => {
     parentDiv.appendChild(spanToken)
     elMessages.appendChild(parentDiv)
     return element
+}
+
+const filterContent = content => {
+    if ((content.match(/```/g) || []).length % 2 === 1) {
+        content += '\n```'
+    }
+    content = content.replace('|interpret_start|\n', '')
+    content = content.replace('\n|interpret_end|', '')
+    return content
 }
 
 // hacks for Chrome
@@ -122,7 +131,7 @@ const loadHistory = id => {
     current.messages = save[id].messages
     let totalTokens = 0
     current.messages.forEach((e, i) => {
-        addMessage(i, `${capitalize(e.role)}: ` + converter.makeHtml(e.content))
+        addMessage(i, `${capitalize(e.role)}: ` + converter.makeHtml(filterContent(e.content)))
         const tokens = encodeGPT(e.content).length
         const tokenField = document.querySelector(`div.message[data-message-index="${i}"]>span.token-field`)
         tokenField.textContent = `(${totalTokens} + ${tokens} = ${totalTokens + tokens} tokens)`
@@ -206,11 +215,7 @@ const generate = () => {
         for await (const chunk of res.body) {
             const string = decoder.decode(chunk)
             currentContent += string
-            if ((currentContent.match(/```/g) || []).length % 2 === 1) {
-                element.innerHTML = 'Assistant: ' + converter.makeHtml(currentContent + '\n```')
-            } else {
-                element.innerHTML = 'Assistant: ' + converter.makeHtml(currentContent)
-            }
+            element.innerHTML = 'Assistant: ' + converter.makeHtml(filterContent(currentContent))
             element.querySelectorAll('pre code').forEach((el) => {
                 if (!el.classList.contains('hljs')) {
                     hljs.highlightElement(el)
@@ -219,7 +224,34 @@ const generate = () => {
         }
         const assistantTotalTokenCount = current.messages.map((e) => encodeGPT(e.content).length).reduce((a, b) => a + b)
         const assistantTokenCount = encodeGPT(currentContent).length
-        current.messages.push({role: 'assistant', content: currentContent})
+        current.messages.push({role: 'assistant', content: currentContent, token_count: assistantTokenCount})
+        // process |interpret| block
+        if (currentContent.includes('|interpret_start|\n```') && currentContent.includes('```\n|interpret_end|')) {
+            const code = currentContent.replace(/[^]*\|interpret_start\|\n```(?:js|javascript)?\n([^]+)\n```\n\|interpret_end\|[^]*/, '$1')
+            globalThis._chatgptui_global_ = {}
+            globalThis._chatgptui_global_.consoleOutput = ''
+            try {
+                const console = window.console;/*{
+                    log: s => globalThis._chatgptui_global_.consoleOutput += `${s}\n`,
+                    info: s => globalThis._chatgptui_global_.consoleOutput += `${s}\n`,
+                    warn: s => globalThis._chatgptui_global_.consoleOutput += `${s}\n`,
+                    error: s => globalThis._chatgptui_global_.consoleOutput += `${s}\n`,
+                }
+                */
+                globalThis._chatgptui_global_.consoleOutput += Function('console', code)(console)
+            } catch (e) {
+                globalThis._chatgptui_global_.consoleOutput += (e.stack || e) + '\n'
+            } finally {
+                currentContent += `\n\nResult:\n\`\`\`\n${globalThis._chatgptui_global_.consoleOutput}\n\`\`\``
+                element.innerHTML = 'Assistant: ' + converter.makeHtml(filterContent(currentContent))
+                element.querySelectorAll('pre code').forEach((el) => {
+                    if (!el.classList.contains('hljs')) {
+                        hljs.highlightElement(el)
+                    }
+                })
+            }
+        }
+
         const assistantTokenField = document.querySelector(`div.message[data-message-index="${current.messages.length - 1}"]>span.token-field`)
         assistantTokenField.textContent = `(${assistantTotalTokenCount} + ${assistantTokenCount} = ${assistantTotalTokenCount + assistantTokenCount} tokens)`
         if (!current.title || current.title.length === 0) {
@@ -287,6 +319,12 @@ elDelete.onclick = () => {
     }
     clear()
     loadAndShowHistory()
+}
+
+document.getElementById('code-interpreter').onclick = () => {
+    elSystem.value = `You can now use JavaScript to complete the task.
+    However, this is not mandatory and you are free not to use JavaScript if desired (for example, a question about JavaScript shouldn't be executed).
+    If you want to evaluate JavaScript to complete the task, please surround the code block with "|interpret_start|\\n\`\`\`" and "\`\`\`\\n|interpret_end|", and include \`return\`.`.trim()
 }
 
 elModel.onchange = () => {

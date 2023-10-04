@@ -99,6 +99,8 @@ fun createPostEventsFlow(url: String, body: String, headers: Map<String, String>
             }
         }.flowOn(Dispatchers.IO)
 
+private val json = Json { ignoreUnknownKeys = true }
+
 fun Application.module() {
     install(Routing)
 
@@ -113,7 +115,7 @@ fun Application.module() {
             @Serializable
             data class Generate(val model: String, val content: List<ContentWithRole>)
 
-            val data: Generate = Json.decodeFromString(call.receiveText())
+            val data: Generate = json.decodeFromString(call.receiveText())
             val body = CompletionsBody(
                     data.model,
                     null,
