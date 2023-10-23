@@ -325,7 +325,7 @@ elDelete.onclick = () => {
 
 document.getElementById('code-interpreter').onclick = () => {
     elSystem.value += `You can now generate JavaScript to help complete the task.
-However, this is not mandatory and you are free not to generate JavaScript if JavaScript is not related in the request.
+However, this is not mandatory and you are free not to generate JavaScript if JavaScript is not related to the request.
 For example, a general question about JavaScript shouldn't generate code.
 Generally, when the calculation tasks are given, you should generate the JavaScript code.
 If you want to evaluate JavaScript to complete the task, please surround the code block with "|interpret_start|\\n\`\`\`" and "\`\`\`\\n|interpret_end|", and include \`return\`.
