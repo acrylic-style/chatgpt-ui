@@ -194,12 +194,18 @@ const generate = () => {
     }
     const prompt = elPrompt.value
     addMessage(current.messages.length, 'User: ' + converter.makeHtml(prompt))
+        .querySelectorAll('pre code').forEach((el) => {
+            if (!el.classList.contains('hljs')) {
+                hljs.highlightElement(el)
+            }
+        })
     const userTotalTokenCount = current.messages.map((e) => encodeGPT(e.content).length).reduce((a, b) => a + b, 0)
     const userTokenCount = encodeGPT(prompt).length
     current.messages.push({role: 'user', content: prompt})
     const userTokenField = document.querySelector(`div.message[data-message-index="${current.messages.length - 1}"]>span.token-field`)
     userTokenField.textContent = `(${userTotalTokenCount} + ${userTokenCount} = ${userTotalTokenCount + userTokenCount} tokens)`
     elPrompt.value = ''
+    let generateLater = false
     fetch("/generate", {
         method: 'POST',
         headers: {
@@ -241,13 +247,8 @@ const generate = () => {
             } catch (e) {
                 globalThis._chatgptui_global_.consoleOutput += (e.stack || e) + '\n'
             } finally {
-                currentContent += `\n\nResult:\n\`\`\`\n${globalThis._chatgptui_global_.consoleOutput}\n\`\`\``
-                element.innerHTML = 'Assistant: ' + converter.makeHtml(filterContent(currentContent))
-                element.querySelectorAll('pre code').forEach((el) => {
-                    if (!el.classList.contains('hljs')) {
-                        hljs.highlightElement(el)
-                    }
-                })
+                elPrompt.value = `Result:\n\`\`\`\n${globalThis._chatgptui_global_.consoleOutput}\n\`\`\``
+                generateLater = true
             }
         }
 
@@ -290,6 +291,7 @@ const generate = () => {
         elPrompt.readOnly = false
         elDelete.disabled = false
         screenTransitionBlocked = false
+        if (generateLater) generate()
     })
 }
 
@@ -322,9 +324,18 @@ elDelete.onclick = () => {
 }
 
 document.getElementById('code-interpreter').onclick = () => {
-    elSystem.value = `You can now use JavaScript to complete the task.
-    However, this is not mandatory and you are free not to use JavaScript if desired (for example, a question about JavaScript shouldn't be executed).
-    If you want to evaluate JavaScript to complete the task, please surround the code block with "|interpret_start|\\n\`\`\`" and "\`\`\`\\n|interpret_end|", and include \`return\`.`.trim()
+    elSystem.value += `You can now generate JavaScript to help complete the task.
+However, this is not mandatory and you are free not to generate JavaScript if JavaScript is not related in the request.
+For example, a general question about JavaScript shouldn't generate code.
+Generally, when the calculation tasks are given, you should generate the JavaScript code.
+If you want to evaluate JavaScript to complete the task, please surround the code block with "|interpret_start|\\n\`\`\`" and "\`\`\`\\n|interpret_end|", and include \`return\`.
+When you request the code to be interpreted, the user (actually javascript) will output a result, so please conclude the result. Or, you can also "chain" the script by running another script.
+Do not say "Let's calculate it", YOU generate the calculation code and let the system evaluate it.
+Also, you should talk to the user in the user's language.`.trim()
+}
+
+document.getElementById('zunda').onclick = () => {
+    elSystem.value += 'あなたは「ずんだもん」というキャラクターのように話してください。ずんだもんは幼い女の子で、無邪気な性格をしており、口調は強気であり、「〜のだ」「〜なのだ」を語尾につけます。'
 }
 
 elModel.onchange = () => {
