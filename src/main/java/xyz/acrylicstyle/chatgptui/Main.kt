@@ -122,14 +122,14 @@ fun Application.module() {
                     1.0,
                     data.content,
                     true,
-                    call.request.host(),
+                    call.request.header("CF-Connecting-IP") ?: call.request.host(),
             )
             call.response.header("X-Accel-Buffering", "no")
             call.response.header(HttpHeaders.CacheControl, "no-cache")
             call.response.header(HttpHeaders.ContentType, "text/event-stream")
             call.respondTextWriter {
                 createPostEventsFlow(
-                        "https://api.openai.com/v1/chat/completions",
+                    "${System.getenv("BASE_URL") ?: "https://api.openai.com/v1"}/chat/completions",
                         Json.encodeToString(body),
                         mapOf(
                                 "Authorization" to "Bearer $openaiToken",
