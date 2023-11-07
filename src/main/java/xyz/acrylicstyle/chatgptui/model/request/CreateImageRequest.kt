@@ -1,4 +1,4 @@
-package xyz.acrylicstyle.chatgptui
+package xyz.acrylicstyle.chatgptui.model.request
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable

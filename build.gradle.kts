@@ -20,6 +20,7 @@ dependencies {
     implementation("io.ktor:ktor-client-cio:2.3.3")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0-RC")
     implementation("org.slf4j:slf4j-simple:2.0.0")
+    implementation("io.ktor:ktor-server-cors-jvm:2.3.3")
 }
 
 tasks {

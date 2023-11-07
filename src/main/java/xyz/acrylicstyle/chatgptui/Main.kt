@@ -1,4 +1,5 @@
 @file:JvmName("MainKt")
+
 package xyz.acrylicstyle.chatgptui
 
 import io.ktor.client.*
@@ -9,6 +10,7 @@ import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
+import io.ktor.server.plugins.cors.routing.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
@@ -20,11 +22,14 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import xyz.acrylicstyle.chatgptui.model.EventData
+import xyz.acrylicstyle.chatgptui.model.request.ChatRequest
+import xyz.acrylicstyle.chatgptui.model.request.CreateImageRequest
+import xyz.acrylicstyle.chatgptui.model.stream.StreamResponse
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
-
-val DEV_MODE = System.getenv("DEV").toBoolean()
 
 private val client = HttpClient(CIO) {
     engine {
@@ -44,65 +49,72 @@ fun getCacheableStaticResource(name: String): () -> ByteArray =
         ({ byteArray })
     }
 
-val staticRoute = mapOf(
-    "/" to (getCacheableStaticResource("index.html") to ContentType.Text.Html.withParameter("charset", "utf-8")),
-    "/main.js" to (getCacheableStaticResource("main.js") to null),
-    "/image" to (getCacheableStaticResource("image.html") to ContentType.Text.Html.withParameter("charset", "utf-8")),
-    "/image.js" to (getCacheableStaticResource("image.js") to null),
-    "/main.css" to (getCacheableStaticResource("main.css") to null),
-)
-
-val openaiToken = System.getenv("OPENAI_TOKEN") ?: error("OPENAI_TOKEN is not defined")
+suspend inline fun <reified T> ApplicationCall.respondJson(value: T, status: HttpStatusCode = HttpStatusCode.OK) {
+    respondText(Json.encodeToString(value), ContentType.Application.Json, status)
+}
 
 fun main() {
     if (DEV_MODE) println("Resource caching is disabled")
     embeddedServer(
-            Netty,
-            port = System.getenv("PORT")?.toIntOrNull() ?: 8080,
-            host = System.getenv("HOST") ?: "0.0.0.0",
-            module = Application::module
+        Netty,
+        port = System.getenv("PORT")?.toIntOrNull() ?: 8080,
+        host = System.getenv("HOST") ?: "0.0.0.0",
+        module = Application::module
     ).start(wait = true)
 }
 
 fun createPostEventsFlow(url: String, body: String, headers: Map<String, String> = emptyMap()): Flow<EventData> =
-        flow {
-            val conn = (URL(url).openConnection() as HttpURLConnection).also {
-                headers.forEach { (key, value) -> it.setRequestProperty(key, value) }
-                it.setRequestProperty("Accept", "text/event-stream")
-                it.doInput = true
-                it.doOutput = true
-            }
+    flow {
+        val conn = (URL(url).openConnection() as HttpURLConnection).also {
+            headers.forEach { (key, value) -> it.setRequestProperty(key, value) }
+            it.setRequestProperty("Accept", "text/event-stream")
+            it.doInput = true
+            it.doOutput = true
+        }
 
-            conn.connect()
+        conn.connect()
 
-            conn.outputStream.write(body.toByteArray())
+        conn.outputStream.write(body.toByteArray())
 
-            if (conn.responseCode !in 200..399) {
-                error("Request failed with ${conn.responseCode}: ${conn.errorStream.bufferedReader().readText()}")
-            }
+        if (conn.responseCode !in 200..399) {
+            error("Request failed with ${conn.responseCode}: ${conn.errorStream.bufferedReader().readText()}")
+        }
 
-            val reader = conn.inputStream.bufferedReader()
+        val reader = conn.inputStream.bufferedReader()
 
-            var event = EventData()
+        var event = EventData()
 
-            while (true) {
-                val line = reader.readLine() ?: break
+        while (true) {
+            val line = reader.readLine() ?: break
 
-                when {
-                    line.startsWith("event:") -> event = event.copy(name = line.substring(6).trim())
-                    line.startsWith("data:") -> event = event.copy(data = line.substring(5).trim())
-                    line.isEmpty() -> {
-                        emit(event)
-                        event = EventData()
-                    }
+            when {
+                line.startsWith("event:") -> event = event.copy(name = line.substring(6).trim())
+                line.startsWith("data:") -> event = event.copy(data = line.substring(5).trim())
+                line.isEmpty() -> {
+                    emit(event)
+                    event = EventData()
                 }
             }
-        }.flowOn(Dispatchers.IO)
+        }
+    }.flowOn(Dispatchers.IO)
 
-private val json = Json { ignoreUnknownKeys = true }
+private val json = Json {
+    ignoreUnknownKeys = true
+}
 
 fun Application.module() {
-    install(Routing)
+    install(CORS) {
+        allowMethod(HttpMethod.Options)
+        allowMethod(HttpMethod.Put)
+        allowMethod(HttpMethod.Delete)
+        allowMethod(HttpMethod.Patch)
+        allowHeader(HttpHeaders.Authorization)
+        allowHeader(HttpHeaders.ContentType)
+        allowHost("localhost:3000")
+        allowHost("127.0.0.1:3000")
+        System.getenv("ALLOWED_HOSTS")?.split(",")?.forEach { allowHost(it) }
+    }
+    install (Routing)
 
     routing {
         staticRoute.forEach { (path, pair) ->
@@ -111,18 +123,27 @@ fun Application.module() {
             }
         }
 
+        get("/models") {
+            call.respondJson(models)
+        }
+
         post("/generate") {
             @Serializable
-            data class Generate(val model: String, val content: List<ContentWithRole>)
+            data class Generate(val model: String, val content: List<JsonObject>)
 
             val data: Generate = json.decodeFromString(call.receiveText())
-            val body = CompletionsBody(
-                    data.model,
-                    null,
-                    1.0,
-                    data.content,
-                    true,
-                    call.request.header("CF-Connecting-IP") ?: call.request.host(),
+
+            if (data.model !in models) {
+                return@post call.respondJson(mapOf("error" to "invalid model"))
+            }
+
+            val body = ChatRequest(
+                data.model,
+                if ("vision" in data.model) 2000 else null,
+                1.0,
+                data.content,
+                true,
+                call.request.header("CF-Connecting-IP") ?: call.request.host(),
             )
             call.response.header("X-Accel-Buffering", "no")
             call.response.header(HttpHeaders.CacheControl, "no-cache")
@@ -130,18 +151,18 @@ fun Application.module() {
             call.respondTextWriter {
                 createPostEventsFlow(
                     "${System.getenv("BASE_URL") ?: "https://api.openai.com/v1"}/chat/completions",
-                        Json.encodeToString(body),
-                        mapOf(
-                                "Authorization" to "Bearer $openaiToken",
-                                "Content-Type" to "application/json",
-                        ),
+                    Json.encodeToString(body),
+                    mapOf(
+                        "Authorization" to "Bearer $openaiToken",
+                        "Content-Type" to "application/json",
+                    ),
                 ).collect { data ->
                     withContext(Dispatchers.IO) {
                         try {
                             if (data.data == "[DONE]") {
                                 this@respondTextWriter.close()
                             } else {
-                                val response = Json.decodeFromString<StreamResponse>(data.data)
+                                val response = json.decodeFromString<StreamResponse>(data.data)
                                 this@respondTextWriter.write(response.choices[0].delta.content)
                                 this@respondTextWriter.flush()
                             }

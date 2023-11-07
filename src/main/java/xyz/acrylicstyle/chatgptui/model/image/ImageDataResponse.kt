@@ -1,14 +1,8 @@
-package xyz.acrylicstyle.chatgptui
+package xyz.acrylicstyle.chatgptui.model.image
 
 import io.ktor.util.*
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-
-@Serializable
-data class ImageResponse(
-    val created: Long,
-    val data: List<ImageDataResponse>,
-)
 
 @Serializable
 data class ImageDataResponse(
