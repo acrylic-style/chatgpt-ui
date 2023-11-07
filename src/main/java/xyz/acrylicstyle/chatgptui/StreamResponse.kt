@@ -10,6 +10,8 @@ internal data class StreamResponse(
         val created: Long,
         val model: String,
         val choices: List<StreamResponseChoice>,
+        @SerialName("system_fingerprint")
+        val systemFingerprint: String? = null,
 )
 
 @Serializable
