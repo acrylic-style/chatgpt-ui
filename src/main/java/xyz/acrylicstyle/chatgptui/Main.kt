@@ -15,21 +15,18 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
-import xyz.acrylicstyle.chatgptui.model.EventData
-import xyz.acrylicstyle.chatgptui.model.request.ChatRequest
+import xyz.acrylicstyle.chatgptui.api.OpenAI
+import xyz.acrylicstyle.chatgptui.model.ContentWithRole
+import xyz.acrylicstyle.chatgptui.api.threads.ThreadCreateBody
+import xyz.acrylicstyle.chatgptui.model.assistant.tool.AssistantTool
 import xyz.acrylicstyle.chatgptui.model.request.CreateImageRequest
-import xyz.acrylicstyle.chatgptui.model.stream.StreamResponse
+import xyz.acrylicstyle.chatgptui.util.HttpUtil.respondJson
 import java.io.InputStream
-import java.net.HttpURLConnection
-import java.net.URL
 
 private val client = HttpClient(CIO) {
     engine {
@@ -49,10 +46,6 @@ fun getCacheableStaticResource(name: String): () -> ByteArray =
         ({ byteArray })
     }
 
-suspend inline fun <reified T> ApplicationCall.respondJson(value: T, status: HttpStatusCode = HttpStatusCode.OK) {
-    respondText(Json.encodeToString(value), ContentType.Application.Json, status)
-}
-
 fun main() {
     if (DEV_MODE) println("Resource caching is disabled")
     embeddedServer(
@@ -62,41 +55,6 @@ fun main() {
         module = Application::module
     ).start(wait = true)
 }
-
-fun createPostEventsFlow(url: String, body: String, headers: Map<String, String> = emptyMap()): Flow<EventData> =
-    flow {
-        val conn = (URL(url).openConnection() as HttpURLConnection).also {
-            headers.forEach { (key, value) -> it.setRequestProperty(key, value) }
-            it.setRequestProperty("Accept", "text/event-stream")
-            it.doInput = true
-            it.doOutput = true
-        }
-
-        conn.connect()
-
-        conn.outputStream.write(body.toByteArray())
-
-        if (conn.responseCode !in 200..399) {
-            error("Request failed with ${conn.responseCode}: ${conn.errorStream.bufferedReader().readText()}")
-        }
-
-        val reader = conn.inputStream.bufferedReader()
-
-        var event = EventData()
-
-        while (true) {
-            val line = reader.readLine() ?: break
-
-            when {
-                line.startsWith("event:") -> event = event.copy(name = line.substring(6).trim())
-                line.startsWith("data:") -> event = event.copy(data = line.substring(5).trim())
-                line.isEmpty() -> {
-                    emit(event)
-                    event = EventData()
-                }
-            }
-        }
-    }.flowOn(Dispatchers.IO)
 
 private val json = Json {
     ignoreUnknownKeys = true
@@ -115,6 +73,8 @@ fun Application.module() {
         System.getenv("ALLOWED_HOSTS")?.split(",")?.forEach { allowHost(it) }
     }
     install (Routing)
+
+    val openAI = OpenAI(openaiToken, System.getenv("BASE_URL") ?: "https://api.openai.com/v1")
 
     routing {
         staticRoute.forEach { (path, pair) ->
@@ -137,37 +97,27 @@ fun Application.module() {
                 return@post call.respondJson(mapOf("error" to "invalid model"))
             }
 
-            val body = ChatRequest(
-                data.model,
-                if ("vision" in data.model) 2000 else null,
-                1.0,
-                data.content,
-                true,
-                call.request.header("CF-Connecting-IP") ?: call.request.host(),
-            )
             call.response.header("X-Accel-Buffering", "no")
             call.response.header(HttpHeaders.CacheControl, "no-cache")
             call.response.header(HttpHeaders.ContentType, "text/event-stream")
             call.respondTextWriter {
-                createPostEventsFlow(
-                    "${System.getenv("BASE_URL") ?: "https://api.openai.com/v1"}/chat/completions",
-                    Json.encodeToString(body),
-                    mapOf(
-                        "Authorization" to "Bearer $openaiToken",
-                        "Content-Type" to "application/json",
-                    ),
+                openAI.chat.createStream(
+                    data.model,
+                    data.content.map { ContentWithRole.fromJson(it) },
+                    maxTokens = (if ("vision" in data.model) 2000 else null),
+                    user = (call.request.header("CF-Connecting-IP") ?: call.request.host())
                 ).collect { data ->
                     withContext(Dispatchers.IO) {
                         try {
-                            if (data.data == "[DONE]") {
+                            if (data == null) {
                                 this@respondTextWriter.close()
                             } else {
-                                val response = json.decodeFromString<StreamResponse>(data.data)
-                                this@respondTextWriter.write(response.choices[0].delta.content)
+                                this@respondTextWriter.write(data.choices[0].delta.content)
                                 this@respondTextWriter.flush()
                             }
                         } catch (e: Exception) {
                             e.printStackTrace()
+                            this@respondTextWriter.close()
                         }
                     }
                 }
@@ -196,5 +146,137 @@ fun Application.module() {
             }
             call.respondText(response.bodyAsText(), ContentType.Application.Json)
         }
+
+        post("/threads/create_and_run") {
+            val data: CreateAndRunRequest = Json.decodeFromString(call.receiveText())
+            if (data.messages.size != 1) error("Must have exact 1 messages")
+            val uploadedFiles = mutableListOf<String>()
+            try {
+                data.files.forEach {
+                    uploadedFiles += openAI.files.upload(it.name, it.data, "assistants").id
+                }
+                openAI.threads.createAndRun(
+                    System.getenv("ASSISTANT_ID") ?: error("ASSISTANT_ID is not set"),
+                    listOf(data.messages[0].copy(fileIds = uploadedFiles)),
+                    model = data.model,
+                    instructions = data.instructions,
+                    tools = data.tools,
+                ).let { call.respondJson(it) }
+            } catch (e: Exception) {
+                uploadedFiles.forEach {
+                    try {
+                        openAI.files.delete(it)
+                    } catch (e: Exception) {
+                        System.err.println("Error deleting file $it")
+                        e.printStackTrace()
+                    }
+                }
+                throw e
+            }
+        }
+
+        delete("/threads/{thread_id}") {
+            val threadId = call.parameters["thread_id"] ?: error("thread_id is not specified")
+            try {
+                val messages = openAI.threads.messages(threadId).list(100)
+                var deleted = 0
+                messages.data.forEach { message ->
+                    message.fileIds.forEach { file ->
+                        try {
+                            openAI.files.delete(file)
+                            deleted++
+                        } catch (e: Exception) {
+                            System.err.println("Failed to delete file $file")
+                            e.printStackTrace()
+                        }
+                    }
+                }
+                println("Deleted $deleted files from $threadId")
+            } catch (e: Exception) {
+                System.err.println("Failed to fetch messages")
+                e.printStackTrace()
+            }
+            openAI.threads.delete(threadId).let { call.respondJson(it) }
+        }
+
+        get("/threads/{thread_id}/messages") {
+            val threadId = call.parameters["thread_id"] ?: error("thread_id is not specified")
+            openAI.threads
+                .messages(threadId)
+                .list(10)
+                .let { call.respondJson(it) }
+        }
+
+        post("/threads/{thread_id}/messages") {
+            @Serializable
+            data class RequestBody(val role: String, val content: String, val fileIds: List<String> = emptyList())
+
+            val threadId = call.parameters["thread_id"] ?: error("thread_id is not specified")
+            val body = json.decodeFromString<RequestBody>(call.receiveText())
+            openAI.threads
+                .messages(threadId)
+                .create(body.role, body.content, body.fileIds)
+                .let { call.respondJson(it) }
+        }
+
+        post("/threads/{thread_id}/runs") {
+            val threadId = call.parameters["thread_id"] ?: error("thread_id is not specified")
+            val data = json.decodeFromString<CreateRunRequest>(call.receiveText())
+            openAI.threads
+                .runs(threadId)
+                .create(
+                    System.getenv("ASSISTANT_ID") ?: error("ASSISTANT_ID is not set"),
+                    data.model,
+                    data.instructions,
+                    data.tools,
+                )
+                .let { call.respondJson(it) }
+        }
+
+        get("/threads/{thread_id}/runs/{run_id}") {
+            val threadId = call.parameters["thread_id"] ?: error("thread_id is not specified")
+            val runId = call.parameters["run_id"] ?: error("run_id is not specified")
+            openAI.threads
+                .runs(threadId)
+                .get(runId)
+                .let { call.respondJson(it) }
+        }
+
+        get("/threads/{thread_id}/runs/{run_id}/steps") {
+            val threadId = call.parameters["thread_id"] ?: error("thread_id is not specified")
+            val runId = call.parameters["run_id"] ?: error("run_id is not specified")
+            openAI.threads
+                .runs(threadId)
+                .steps(runId)
+                .list()
+                .let { call.respondJson(it) }
+        }
+
+        get("/files/{id}") {
+            call.respondJson(openAI.files.get(call.parameters["id"]!!))
+        }
+
+        get("/files/{id}/content") {
+            call.respondBytes(openAI.files.getContent(call.parameters["id"]!!))
+        }
     }
 }
+
+@Serializable
+data class CreateRunRequest(
+    val model: String,
+    val instructions: String?,
+    val tools: List<AssistantTool> = emptyList()
+)
+
+@Serializable
+data class CreateAndRunRequest(
+    val model: String,
+    val instructions: String?,
+    val tools: List<AssistantTool> = emptyList(),
+    val messages: List<ThreadCreateBody.ThreadInitialMessage>,
+    val files: List<FileData> = emptyList(),
+)
+
+@Serializable
+class FileData(val name: String, val data: ByteArray)

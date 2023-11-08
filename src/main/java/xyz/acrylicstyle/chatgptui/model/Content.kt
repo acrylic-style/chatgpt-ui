@@ -2,6 +2,8 @@ package xyz.acrylicstyle.chatgptui.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 @Serializable
 sealed interface Content {
@@ -9,6 +11,14 @@ sealed interface Content {
         fun text(text: String) = TextContent(text)
 
         fun image(url: String) = ImageContent(url)
+
+        fun fromJson(json: JsonObject): Content {
+            return if (json["text"] != null) {
+                text(json["text"]!!.jsonPrimitive.content)
+            } else {
+                image(json["image_url"]!!.jsonPrimitive.content)
+            }
+        }
     }
 }
 
