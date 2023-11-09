@@ -259,6 +259,21 @@ fun Application.module() {
             }.let { call.respondText(it.bodyAsText(), contentType = it.contentType()) }
         }
 
+        post("/search") {
+            val key = System.getenv("CUSTOM_SEARCH_KEY")
+                ?: return@post call.respondJson(mapOf("error" to "Search API is unavailable"))
+            val id = System.getenv("CUSTOM_SEARCH_ID")
+                ?: return@post call.respondJson(mapOf("error" to "Search API is unavailable"))
+            val query = call.receiveText()
+            client.get("https://customsearch.googleapis.com/customsearch/v1") {
+                header("User-Agent", "ktor client")
+                parameter("key", key)
+                parameter("cx", id)
+                parameter("q", query)
+                parameter("gl", call.request.header("CF-IPCountry")?.lowercase())
+            }.let { call.respondText(it.bodyAsText(), contentType = it.contentType()) }
+        }
+
         get("/threads/{thread_id}/runs/{run_id}/steps") {
             val threadId = call.parameters["thread_id"] ?: error("thread_id is not specified")
             val runId = call.parameters["run_id"] ?: error("run_id is not specified")
