@@ -14,6 +14,7 @@ import io.ktor.server.plugins.cors.routing.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import io.ktor.util.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -256,7 +257,7 @@ fun Application.module() {
         post("/request") {
             client.get(call.receiveText()) {
                 header("User-Agent", "ktor client")
-            }.let { call.respondText(it.bodyAsText(), contentType = it.contentType()) }
+            }.let { call.respondBytes(it.bodyAsChannel().toByteArray(), contentType = it.contentType()) }
         }
 
         post("/search") {
