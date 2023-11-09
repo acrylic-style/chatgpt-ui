@@ -11,6 +11,7 @@ import xyz.acrylicstyle.chatgptui.model.JsonConvertible.Companion.encodeToString
 import xyz.acrylicstyle.chatgptui.model.ListResult
 import xyz.acrylicstyle.chatgptui.model.run.Run
 import xyz.acrylicstyle.chatgptui.model.assistant.tool.AssistantTool
+import xyz.acrylicstyle.chatgptui.model.run.ToolOutputs
 
 class RunsRequest(private val openAI: OpenAI, private val httpClient: HttpClient, private val threadId: String) {
     private val baseUrl = "${openAI.baseUrl}/threads/$threadId/runs"
@@ -109,6 +110,30 @@ class RunsRequest(private val openAI: OpenAI, private val httpClient: HttpClient
         parameter("after", after)
         parameter("before", before)
     }.bodyAsText().let { Json.decodeFromString<ListResult<Run>>(it) }
+
+    /**
+     * When a run has the `status: "requires_action"` and `required_action.type` is `submit_tool_outputs`,
+     * this endpoint can be used to submit the outputs from the tool calls once they're all completed.
+     * All outputs must be submitted in a single request.
+     * @param runId The ID of the run that requires the tool output submission.
+     * @param toolOutputs A list of tools for which the outputs are being submitted.
+     * @return The modified [Run] object matching the specified ID.
+     */
+    suspend fun submitToolOutputs(runId: String, toolOutputs: List<ToolOutputs>) =
+        httpClient.post("$baseUrl/$runId/submit_tool_outputs") {
+            header("Authorization", "Bearer ${openAI.apiKey}")
+            header("OpenAI-Beta", "assistants=v1")
+            header("Content-Type", "application/json")
+            setBody(mapOf(
+                "tool_outputs" to toolOutputs,
+            ).encodeToString())
+        }.bodyAsText().let {
+            try {
+                Json.decodeFromString<Run>(it)
+            } catch (e: Exception) {
+                throw RuntimeException("Failed to decode JSON: $it", e)
+            }
+        }
 
     /**
      * Cancels a run that is `in_progress`.

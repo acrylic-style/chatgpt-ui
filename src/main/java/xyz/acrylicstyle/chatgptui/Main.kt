@@ -25,6 +25,7 @@ import xyz.acrylicstyle.chatgptui.model.ContentWithRole
 import xyz.acrylicstyle.chatgptui.api.threads.ThreadCreateBody
 import xyz.acrylicstyle.chatgptui.model.assistant.tool.AssistantTool
 import xyz.acrylicstyle.chatgptui.model.request.CreateImageRequest
+import xyz.acrylicstyle.chatgptui.model.run.ToolOutputs
 import xyz.acrylicstyle.chatgptui.util.HttpUtil.respondJson
 import java.io.InputStream
 
@@ -240,6 +241,22 @@ fun Application.module() {
                 .runs(threadId)
                 .get(runId)
                 .let { call.respondJson(it) }
+        }
+
+        post("/threads/{thread_id}/runs/{run_id}/submit_tool_outputs") {
+            val threadId = call.parameters["thread_id"] ?: error("thread_id is not specified")
+            val runId = call.parameters["run_id"] ?: error("run_id is not specified")
+            val data = json.decodeFromString<List<ToolOutputs>>(call.receiveText())
+            openAI.threads
+                .runs(threadId)
+                .submitToolOutputs(runId, data)
+                .let { call.respondJson(it) }
+        }
+
+        post("/request") {
+            client.get(call.receiveText()) {
+                header("User-Agent", "ktor client")
+            }.let { call.respondText(it.bodyAsText(), contentType = it.contentType()) }
         }
 
         get("/threads/{thread_id}/runs/{run_id}/steps") {
