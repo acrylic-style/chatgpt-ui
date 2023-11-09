@@ -15,6 +15,7 @@ interface JsonConvertible {
     companion object {
         @OptIn(ExperimentalSerializationApi::class)
         val json = Json {
+            ignoreUnknownKeys = true
             serializersModule = SerializersModule {
                 contextual(ThreadCreateBody.ThreadInitialMessage::class, ThreadCreateBody.ThreadInitialMessage.serializer())
                 contextual(Any::class, DynamicLookupSerializer)

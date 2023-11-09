@@ -48,7 +48,13 @@ class RunsRequest(private val openAI: OpenAI, private val httpClient: HttpClient
             "tools" to tools,
             "metadata" to metadata,
         ).encodeToString())
-    }.bodyAsText().let { Json.decodeFromString<Run>(it) }
+    }.bodyAsText().let {
+        try {
+            Json.decodeFromString<Run>(it)
+        } catch (e: Exception) {
+            throw RuntimeException("Failed to decode JSON: $it", e)
+        }
+    }
 
     /**
      * Retrieve a run.

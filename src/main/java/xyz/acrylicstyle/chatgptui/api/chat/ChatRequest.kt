@@ -6,6 +6,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 import xyz.acrylicstyle.chatgptui.api.OpenAI
 import xyz.acrylicstyle.chatgptui.model.ContentWithRole
+import xyz.acrylicstyle.chatgptui.model.JsonConvertible
 import xyz.acrylicstyle.chatgptui.model.JsonConvertible.Companion.encodeToString
 import xyz.acrylicstyle.chatgptui.model.stream.StreamResponse
 import xyz.acrylicstyle.chatgptui.util.HttpUtil
@@ -28,6 +29,6 @@ class ChatRequest(private val openAI: OpenAI, private val httpClient: HttpClient
             ),
         ).map { data ->
             if (data.data == "[DONE]") return@map null
-            Json.decodeFromString<StreamResponse>(data.data)
+            JsonConvertible.json.decodeFromString<StreamResponse>(data.data)
         }
 }
